@@ -268,3 +268,50 @@ func Test7(t *testing.T) {
 		})
 	}
 }
+
+func Test8a(t *testing.T) {
+	tcs := []struct {
+		name    string
+		input   string
+		size    int
+		chunked string
+	}{
+		{
+			name:    "missing one",
+			input:   "12345",
+			size:    3,
+			chunked: "123,45",
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			chunks := ChunkInPlace([]byte(tc.input), tc.size)
+			joined := bytes.Join(chunks, []byte(","))
+			equalString(t, string(joined), tc.chunked)
+		})
+	}
+}
+
+func Test8(t *testing.T) {
+	tcs := []struct {
+		name     string
+		filename string
+		matches  map[int]bool
+	}{
+		{
+			name:     "",
+			filename: "8.txt",
+			matches:  map[int]bool{132: true},
+		},
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			lines := mustHexDecodeFile(tc.filename)
+			for i, l := range lines {
+				if tc.matches[i] != DetectECB(l) {
+					t.Errorf("line %d != %v", i, tc.matches[i])
+				}
+			}
+		})
+	}
+}

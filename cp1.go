@@ -246,3 +246,28 @@ func AESDecrypt(cipher, key []byte) []byte {
 	}
 	return dst
 }
+
+func ChunkInPlace(b []byte, size int) [][]byte {
+	r := make([][]byte, 0, len(b)/size+1)
+
+	for i := 0; i < len(b); i += size {
+		hi := i + size
+		if hi > len(b) {
+			hi = len(b)
+		}
+		r = append(r, b[i:hi:hi])
+	}
+	return r
+}
+
+func DetectECB(b []byte) bool {
+	seen := map[string]bool{}
+	for _, chunk := range ChunkInPlace(b, 16) {
+		s := string(chunk)
+		if seen[s] {
+			return true
+		}
+		seen[s] = true
+	}
+	return false
+}
