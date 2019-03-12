@@ -39,39 +39,65 @@ func XorFixed(a, b []byte) []byte {
 	return c
 }
 
-var englishCharFreqs = map[byte]float64{}
+type FrequencyMap [1 << 8]float64
 
-func MakeFrequencies() {
+func NewFrequencyMap(b []byte) *FrequencyMap {
+	var freqs FrequencyMap
+	for _, c := range b {
+		freqs[c]++
+	}
+	for c := range freqs {
+		freqs[c] /= float64(len(b))
+	}
+	return &freqs
+}
+
+// Distance returns the Pythagorean vector distance of two FrequencyMaps.
+func (f *FrequencyMap) Distance(other *FrequencyMap) float64 {
+	// compare maps, compute n-dimensional vector length
+	var sum float64
+	for i := 0; i < 1<<8; i++ {
+		distance := f[byte(i)] - other[byte(i)]
+		distance *= distance
+		sum += distance
+	}
+	return math.Sqrt(sum)
+}
+
+// Similarity returns the inverse of Distance.
+// 1 is maximally alike and 0 is minimally alike.
+func (f *FrequencyMap) Similarity(b []byte) float64 {
+	return 1 - f.Distance(NewFrequencyMap(b))
+}
+
+var EnglishFreqs *FrequencyMap
+
+func SaveFrequencyMap() {
 	b, err := ioutil.ReadFile("moby-dick.txt")
 	die(err)
-	letterCount := float64(0)
-	for _, c := range b {
-		letterCount++
-		englishCharFreqs[c]++
-	}
-	for c, f := range englishCharFreqs {
-		englishCharFreqs[c] = f / letterCount
-	}
+
+	EnglishFreqs = NewFrequencyMap(b)
+
 	f, err := os.Create("freq.gob")
 	die(err)
 	defer f.Close()
 	enc := gob.NewEncoder(f)
-	err = enc.Encode(englishCharFreqs)
+	err = enc.Encode(EnglishFreqs)
 	die(err)
 }
 
-func LoadFrequencies() {
+func LoadFrequencyMap() {
 	f, err := os.Open("freq.gob")
 	die(err)
 	defer f.Close()
 	dec := gob.NewDecoder(f)
-	err = dec.Decode(&englishCharFreqs)
+	err = dec.Decode(&EnglishFreqs)
 	die(err)
 }
 
 func init() {
-	// MakeFrequencies()
-	LoadFrequencies()
+	// SaveFrequencyMap()
+	LoadFrequencyMap()
 }
 
 // Bayesian Englishness converges on 1 too quickly!
@@ -84,8 +110,8 @@ func BayesianEnglishness(b []byte) float64 {
 	const pChar float64 = 1.0 / (1 << 8)
 
 	for _, c := range b {
-		freq, ok := englishCharFreqs[c]
-		if !ok && c < 1<<7 {
+		freq := EnglishFreqs[c]
+		if freq == 0 && c < 1<<7 {
 			continue
 		}
 		inverse := (1 - probability)
@@ -95,25 +121,9 @@ func BayesianEnglishness(b []byte) float64 {
 	return probability
 }
 
-func Englishness(b []byte) float64 {
-	// make char frequency map
-	freqs := make([]float64, 1<<8)
-	for _, c := range b {
-		freqs[c]++
-	}
-	for c := range freqs {
-		freqs[c] /= float64(len(b))
-	}
-
-	// compare maps, compute n-dimensional vector length
-	var sum float64
-	for i := 0; i < 1<<8; i++ {
-		distance := englishCharFreqs[byte(i)] - freqs[byte(i)]
-		distance *= distance
-		sum += distance
-	}
-	// subtract the square root, so 1 is maximally alike, 0 is minimally alike
-	return 1 - math.Sqrt(sum)
+func Englishness(b []byte) (float64, bool) {
+	englishness := EnglishFreqs.Similarity(b)
+	return englishness, englishness > 0.6
 }
 
 func XorByte(b []byte, key byte) []byte {
@@ -127,7 +137,7 @@ func XorByte(b []byte, key byte) []byte {
 func MostEnglishXor(b []byte) (key byte, score float64, decoded string) {
 	for i := 0; i < 1<<8; i++ {
 		trial := XorByte(b, byte(i))
-		englishness := Englishness(trial)
+		englishness := EnglishFreqs.Similarity(trial)
 		if englishness > score {
 			score = englishness
 			key = byte(i)
@@ -218,12 +228,8 @@ func GuessXorRepeating(contents []byte, maxSize int) (key []byte, decoded string
 			lowestAvg = avg
 		}
 	}
-	// fixme
-	// fmt.Println("size:", bestSize)
 	for _, block := range Transpose(contents, bestSize) {
 		subkey, _, _ := MostEnglishXor(block)
-		// fixme
-		// fmt.Printf("block %v\n", score == 1.0)
 		key = append(key, subkey)
 	}
 	decoded = string(XorRepeating(contents, key))

@@ -85,11 +85,26 @@ func Test3a(t *testing.T) {
 			input:  "Cooking MC's like a pound of bacon",
 			output: true,
 		},
+		{
+			name:   "line noise",
+			input:  "\x00\x11\x22\x33",
+			output: false,
+		},
+		{
+			name:   "Japanese",
+			input:  "日本語",
+			output: false,
+		},
+		{
+			name:   "world",
+			input:  "HELLO, WORLD!",
+			output: true,
+		},
 	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
-			englishness := Englishness([]byte(tc.input))
-			if englishness > 0.6 != tc.output {
+			englishness, ok := Englishness([]byte(tc.input))
+			if ok != tc.output {
 				t.Errorf("Englishness of %q = %.2f", tc.input, englishness)
 			}
 		})
