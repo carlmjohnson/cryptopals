@@ -2,6 +2,7 @@ package cryptopals
 
 import (
 	"bufio"
+	"crypto/aes"
 	"encoding/base64"
 	"encoding/gob"
 	"encoding/hex"
@@ -234,4 +235,14 @@ func GuessXorRepeating(contents []byte, maxSize int) (key []byte, decoded string
 	}
 	decoded = string(XorRepeating(contents, key))
 	return
+}
+
+func AESDecrypt(cipher, key []byte) []byte {
+	block, err := aes.NewCipher(key)
+	die(err)
+	dst := make([]byte, len(cipher))
+	for i := 0; i < len(dst); i += block.BlockSize() {
+		block.Decrypt(dst[i:], cipher[i:])
+	}
+	return dst
 }
